@@ -1,0 +1,70 @@
+---
+title: "Expected Kills"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r Read in the Data}
+ncaa_data <- read.csv("./ncaa_data.csv") %>% select(-X)
+```
+
+
+```{r}
+library(tidyverse)    # data manipulation and plotting
+library(datavolley)   # working with .dvw files from Data Volley
+library(intrval)      # use of `%ni` function, opposite of %in%
+#library(tidymodels)   # building statistical models
+
+ncaa_data <- ncaa_data %>%
+  mutate(time = as.character(time),
+         prac_date = as.Date(time),
+         prev1skill = binhf::shift(skill,1,"right"),
+         prev2skill = binhf::shift(skill,2,"right"),
+         prev1skilleval = binhf::shift(evaluation_code,1,"right"),
+         prev2skilleval = binhf::shift(evaluation_code,2,"right"),
+         prev1set_code = binhf::shift(set_code,1,"right"),
+         
+         post1skill = binhf::shift(skill,1,"left"),
+         post2skill = binhf::shift(skill,2,"left"),
+         post1skilleval = binhf::shift(evaluation_code,1,"left"),
+         post2skilleval = binhf::shift(evaluation_code,2,"left"))
+```
+
+
+```{r}
+attack <- ncaa_data %>%
+  dplyr::filter(sk == 4 & !is.na(prev1x1) & !is.na(prev1y1) &       # attacks with set locations
+                  skill_type != "Other attack" &                    # remove over pass attacks
+                  prev1skill == "Set" & 
+                  prev2skill %in% c("Reception","Dig","Freeball")) %>%
+  dplyr::mutate(result = ifelse(evaluation_code == "#","kill","other"),
+                result = factor(result),
+                attacktype = case_when(skill_type == "High ball attack" ~ "OS",
+                                       skill_type == "Quick ball attack" ~ "Q",
+                                       TRUE ~ "IS"),
+                attacktype = factor(attacktype),
+                attack_subtype = case_when(skill_subtype == "Hard spike" ~ "H",
+                                           skill_subtype == "Soft spike/topspin" ~ "P",
+                                           skill_subtype == "Tip" ~ "T",
+                                           TRUE ~ "T"),
+                attack_subtype = factor(attack_subtype),
+                phase = case_when(prev2skill == "Reception" ~ "Reception",
+                                  prev2skill == "Dig" ~ "DigTransition",
+                                  prev2skill == "Freeball" ~ "FreeBall",
+                                  TRUE ~ "other"),
+                phase = factor(phase),
+                q_available = case_when(prev1set_code %in% c("KF","KG","KP","KB","KS","KC") ~ "Yes",
+                                        prev1set_code == "KO" ~ "No",
+                                        is.na(prev1set_code) ~ "No",  # ^ my codes for Setter Calls..
+                                        TRUE ~ "No"),                 # change these out for your own
+                q_available = factor(q_available)) %>%
+  dplyr::select(result,prev1x1,prev1y1,attacktype,q_available,phase)
+
+
+head(attack)
+```
+
